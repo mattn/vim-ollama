@@ -794,7 +794,7 @@ function! ollama#review#TrackOpenBuffers()
             " Avoid duplicates
             if index(g:ollama_project_files, filepath) == -1
                 call add(g:ollama_project_files, filepath)
-                echom "Tracked: " . filepath
+"                echom "Tracked: " . filepath
             endif
         endif
     endfor
@@ -816,7 +816,7 @@ function! ollama#review#TrackCurrentBuf()
 
     if index(g:ollama_project_files, relpath) == -1
         call add(g:ollama_project_files, relpath)
-        echom "Tracked: " . relpath
+"        echom "Tracked: " . relpath
         call ollama#review#ShowProjectView()
     else
         echom "Already tracked: " . relpath
