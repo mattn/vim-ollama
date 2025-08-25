@@ -49,10 +49,8 @@ async def stream_chat_message(messages, endpoint, model, options, timeout):
                                 assistant_message += content
                                 print(content, end='', flush=True)
 
-                                # If <EOT> is detected, stop processing
                                 if '<EOT>' in content:
                                     break
-                            # Stop if response contains an indication of completion
                             if message.get('done', False):
                                 print('<EOT>', flush=True)
                                 break
@@ -69,7 +67,6 @@ async def stream_chat_message(messages, endpoint, model, options, timeout):
         print(f"An error occurred: {str(e)}")
         log.error(f"An error occurred: {str(e)}")
 
-    # Add the assistant's message to the conversation history
     if assistant_message:
         messages.append({"role": "assistant", "content": assistant_message.strip()})
 
@@ -80,22 +77,43 @@ async def main(baseurl, model, options, systemprompt, timeout):
 
     multiline_input = False
     multiline_message = []
+    image_buffer = []
 
     if systemprompt != '':
         conversation_history.append({"role": "system", "content": systemprompt})
+
+    def build_user_message_with_images(text, image_paths=None):
+        message = {"role": "user", "content": text}
+        if image_paths:
+            images_b64 = []
+            for path in image_paths:
+                with open(path, "rb") as f:
+                    images_b64.append(base64.b64encode(f.read()).decode("utf-8"))
+            message["images"] = images_b64
+        return message
 
     while True:
         try:
             user_message = input("").strip()
 
+            # Bild hinzufügen
+            if user_message.startswith(":img "):
+                path = user_message[5:].strip()
+                image_buffer.append(path)
+                print(f"Image queued: {path}")
+                continue
+
             if multiline_input:
                 if user_message == '"""':
                     multiline_input = False
                     complete_message = "\n".join(multiline_message)
-                    conversation_history.append({"role": "user", "content": complete_message})
+                    conversation_history.append(build_user_message_with_images(complete_message, image_buffer))
                     multiline_message = []
+                    image_buffer = []
 
-                    task = asyncio.create_task(stream_chat_message(conversation_history, endpoint, model, options, timeout))
+                    task = asyncio.create_task(
+                        stream_chat_message(conversation_history, endpoint, model, options, timeout)
+                    )
                     await task
                 else:
                     multiline_message.append(user_message)
@@ -107,13 +125,15 @@ async def main(baseurl, model, options, systemprompt, timeout):
                     print("Exiting the chat.")
                     exit(0)
                 else:
-                    conversation_history.append({"role": "user", "content": user_message})
-                    task = asyncio.create_task(stream_chat_message(conversation_history, endpoint, model, options, timeout))
+                    conversation_history.append(build_user_message_with_images(user_message, image_buffer))
+                    image_buffer = []
+                    task = asyncio.create_task(
+                        stream_chat_message(conversation_history, endpoint, model, options, timeout)
+                    )
                     await task
 
         except KeyboardInterrupt:
             print("\nStreaming interrupted. Showing prompt again...")
-            # Cancel the current task to clean up properly
             if 'task' in locals():
                 task.cancel()
                 try:
